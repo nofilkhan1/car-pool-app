@@ -16,12 +16,12 @@ Deno.serve(async (request) => {
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
     const { data: verification, error: readError } = await admin.from('fast_id_verifications').select('id,user_id,id_card_image_url').eq('id', verificationId).single()
     if (readError) throw readError
+    const { error: storageError } = await admin.storage.from('fast-id-cards').remove([verification.id_card_image_url])
+    if (storageError) throw storageError
     const { error: profileError } = await admin.from('profiles').update({ fast_id_status: decision }).eq('id', verification.user_id)
     if (profileError) throw profileError
     const { error: deleteError } = await admin.from('fast_id_verifications').delete().eq('id', verificationId)
     if (deleteError) throw deleteError
-    const { error: storageError } = await admin.storage.from('fast-id-cards').remove([verification.id_card_image_url])
-    if (storageError) throw storageError
     return new Response(JSON.stringify({ ok: true }), { headers: { ...cors, 'Content-Type': 'application/json' } })
   } catch (error) { return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Review failed' }), { status: 400, headers: { ...cors, 'Content-Type': 'application/json' } }) }
 })
