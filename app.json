@@ -1,11 +1,12 @@
 {
   "expo": {
-    "name": "FAST Carpool",
-    "slug": "fast-carpool",
+    "name": "fast-carpool-scaffold",
+    "slug": "fast-carpool-scaffold",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "plugins": [["expo-image-picker", { "photosPermission": "FASTPOOL uses your photos only to submit your FAST ID for one-time verification.", "cameraPermission": "FASTPOOL uses your camera only to submit your FAST ID for one-time verification.", "microphonePermission": false }]],
     "ios": {
       "supportsTablet": true
     },
