@@ -1,23 +1,59 @@
 import { StatusBar } from 'expo-status-bar'
-import { StyleSheet, Text, View } from 'react-native'
+import * as ImagePicker from 'expo-image-picker'
+import { useEffect, useMemo, useState } from 'react'
+import { ActivityIndicator, Alert, Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { supabase } from './src/lib/supabase'
 
-export default function App() {
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>FAST Carpool</Text>
-      <Text style={styles.subtitle}>A safer ride home for FAST NUCES Lahore.</Text>
-      <StatusBar style="auto" />
-    </View>
-  );
+const FAST_DOMAINS = ['lhr.nu.edu.pk', 'nu.edu.pk']
+const ADMIN_USER_ID = process.env.EXPO_PUBLIC_ADMIN_USER_ID ?? 'REPLACE_WITH_ADMIN_USER_ID'
+type User = { id: string; email?: string }
+type Profile = { full_name: string; batch: string; gender: string; phone: string; fast_id_status: string }
+const emailIsFast = (email: string) => FAST_DOMAINS.includes(email.trim().toLowerCase().split('@')[1] ?? '')
+
+async function chooseIdCard(source: 'camera' | 'gallery') {
+  const permission = source === 'camera' ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync()
+  if (!permission.granted) throw new Error('Please allow camera or photo-library access to upload your FAST ID.')
+  const result = source === 'camera' ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.75 }) : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.75 })
+  return result.canceled ? null : result.assets[0]
+}
+async function uploadIdCard(userId: string, uri: string) {
+  const body = await (await fetch(uri)).arrayBuffer()
+  const path = `${userId}/${Date.now()}.jpg`
+  const { error } = await supabase.storage.from('fast-id-cards').upload(path, body, { contentType: 'image/jpeg', upsert: false })
+  if (error) throw error
+  return path
+}
+function Button({ title, onPress, secondary = false, disabled = false }: { title: string; onPress: () => void; secondary?: boolean; disabled?: boolean }) { return <Pressable disabled={disabled} onPress={onPress} style={[styles.button, secondary && styles.secondaryButton, disabled && styles.disabled]}><Text style={[styles.buttonText, secondary && styles.secondaryButtonText]}>{title}</Text></Pressable> }
+
+function AuthScreen({ onUser }: { onUser: (user: User) => void }) {
+  const [signup, setSignup] = useState(false); const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [busy, setBusy] = useState(false)
+  const submit = async () => { setBusy(true); try { if (!emailIsFast(email)) throw new Error('Use your FAST Lahore student email (@lhr.nu.edu.pk or legacy @nu.edu.pk).'); if (password.length < 8) throw new Error('Password must be at least 8 characters.'); const result = signup ? await supabase.auth.signUp({ email: email.trim().toLowerCase(), password }) : await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password }); if (result.error) throw result.error; if (!result.data.session) Alert.alert('Check your email', 'Confirm your FAST email, then return to sign in.'); else onUser({ id: result.data.user!.id, email: result.data.user!.email }) } catch (error: any) { Alert.alert('Could not continue', error.message) } finally { setBusy(false) } }
+  return <SafeAreaView style={styles.safe}><View style={styles.authCard}><Text style={styles.brand}>FAST Carpool</Text><Text style={styles.heading}>{signup ? 'Create your student account' : 'Welcome back'}</Text><Text style={styles.muted}>Only FAST NUCES Lahore email accounts can join.</Text><TextInput autoCapitalize="none" keyboardType="email-address" placeholder="you@lhr.nu.edu.pk" value={email} onChangeText={setEmail} style={styles.input} /><TextInput secureTextEntry placeholder="Password (8+ characters)" value={password} onChangeText={setPassword} style={styles.input} /><Button title={busy ? 'Please wait…' : signup ? 'Sign up' : 'Sign in'} onPress={submit} disabled={busy} /><Button title={signup ? 'I already have an account' : 'Create an account'} secondary onPress={() => setSignup(!signup)} /><Text style={styles.privacy}>Your ID card is used only for one-time student verification. It is reviewed once and automatically deleted after a decision.</Text></View><StatusBar style="dark" /></SafeAreaView>
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: { fontSize: 28, fontWeight: '700', color: '#111827' },
-  subtitle: { marginTop: 8, color: '#4B5563' },
-})
+function OnboardingScreen({ user, onDone }: { user: User; onDone: () => void }) {
+  const [form, setForm] = useState({ full_name: '', batch: '', gender: '', phone: '' }); const [asset, setAsset] = useState<ImagePicker.ImagePickerAsset | null>(null); const [busy, setBusy] = useState(false)
+  const save = async () => { if (!form.full_name || !form.batch || !form.gender || !form.phone || !asset) return Alert.alert('Complete your profile', 'Please fill every field and add your FAST ID card photo.'); setBusy(true); try { const path = await uploadIdCard(user.id, asset.uri); const { error: profileError } = await supabase.from('profiles').upsert({ id: user.id, ...form, fast_id_status: 'pending' }); if (profileError) throw profileError; const { error } = await supabase.from('fast_id_verifications').insert({ user_id: user.id, id_card_image_url: path, status: 'pending' }); if (error) throw error; onDone() } catch (error: any) { Alert.alert('Upload failed', error.message) } finally { setBusy(false) } }
+  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.container}><Text style={styles.brand}>One quick step</Text><Text style={styles.heading}>Tell us about you</Text><Text style={styles.muted}>Your phone number is private and is only used for ride coordination.</Text>{(['full_name', 'batch', 'gender', 'phone'] as const).map((field) => <TextInput key={field} placeholder={field === 'full_name' ? 'Full name' : field === 'batch' ? 'Batch (e.g. 2024)' : field === 'gender' ? 'Gender' : 'Phone number'} value={form[field]} onChangeText={(value) => setForm({ ...form, [field]: value })} style={styles.input} keyboardType={field === 'phone' ? 'phone-pad' : 'default'} />)}<View style={styles.notice}><Text style={styles.noticeTitle}>Why we need your FAST ID</Text><Text style={styles.muted}>We use this photo only to verify that you are a real FAST student. A reviewer checks it once. When approved or rejected, the image and submission record are automatically deleted; only the result remains on your profile.</Text></View>{asset && <Image source={{ uri: asset.uri }} style={styles.preview} />}<Button title="Take a photo" secondary onPress={async () => { try { setAsset(await chooseIdCard('camera')) } catch (e: any) { Alert.alert('Camera unavailable', e.message) } }} /><Button title="Choose from gallery" secondary onPress={async () => { try { setAsset(await chooseIdCard('gallery')) } catch (e: any) { Alert.alert('Photo access unavailable', e.message) } }} /><Button title={busy ? 'Submitting…' : 'Submit for verification'} onPress={save} disabled={busy} /></ScrollView></SafeAreaView>
+}
+
+function PendingScreen({ user, status, onRefresh, onSignOut, onAdmin }: { user: User; status: string; onRefresh: () => void; onSignOut: () => void; onAdmin: () => void }) { const verified = status === 'verified'; return <SafeAreaView style={styles.safe}><View style={styles.container}><Text style={styles.brand}>FAST Carpool</Text><Text style={styles.heading}>{verified ? 'You’re verified' : status === 'rejected' ? 'Verification needs attention' : 'Pending review'}</Text><Text style={styles.muted}>{verified ? 'Your FAST ID was verified. Ride posting and requests will be available here as those features are added.' : status === 'rejected' ? 'Your FAST ID could not be verified. Please contact support before submitting again.' : 'Your FAST ID is being reviewed. You cannot post or request rides until your profile is verified.'}</Text><Button title="Check status" onPress={onRefresh} /><Button title="Sign out" secondary onPress={onSignOut} />{user.id === ADMIN_USER_ID && <Button title="Admin verification" secondary onPress={onAdmin} />}</View></SafeAreaView> }
+
+function AdminScreen({ onBack }: { onBack: () => void }) {
+  const [items, setItems] = useState<any[]>([]); const [signedUrls, setSignedUrls] = useState<Record<string, string>>({}); const [busy, setBusy] = useState(false)
+  const load = async () => { const { data, error } = await supabase.from('fast_id_verifications').select('id,user_id,id_card_image_url,submitted_at,profiles(full_name,batch,gender)').eq('status', 'pending').order('submitted_at'); if (error) Alert.alert('Could not load submissions', error.message); else { setItems(data ?? []); const urls: Record<string, string> = {}; for (const item of data ?? []) { const signed = await supabase.storage.from('fast-id-cards').createSignedUrl(item.id_card_image_url, 300); if (signed.data?.signedUrl) urls[item.id] = signed.data.signedUrl }; setSignedUrls(urls) } }
+  useEffect(() => { load() }, [])
+  const review = async (item: any, status: 'verified' | 'rejected') => { setBusy(true); try { const { error } = await supabase.functions.invoke('review-verification', { body: { verificationId: item.id, decision: status } }); if (error) throw error; setItems(items.filter((entry) => entry.id !== item.id)) } catch (error: any) { Alert.alert('Review failed', error.message) } finally { setBusy(false) } }
+  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.container}><Button title="Back" secondary onPress={onBack} /><Text style={styles.heading}>Pending ID reviews</Text>{items.length === 0 && <Text style={styles.muted}>No pending submissions.</Text>}{items.map((item) => <View key={item.id} style={styles.reviewCard}><Text style={styles.cardTitle}>{item.profiles?.full_name ?? 'Unnamed student'}</Text><Text style={styles.muted}>Batch {item.profiles?.batch ?? '—'} · {item.profiles?.gender ?? '—'}</Text>{signedUrls[item.id] && <Image source={{ uri: signedUrls[item.id] }} style={styles.preview} />}<View style={styles.row}><Button title="Reject" secondary disabled={busy} onPress={() => review(item, 'rejected')} /><Button title="Approve" disabled={busy} onPress={() => review(item, 'verified')} /></View></View>)}</ScrollView></SafeAreaView>
+}
+
+export default function App() {
+  const [user, setUser] = useState<User | null>(null); const [profile, setProfile] = useState<Profile | null>(null); const [loading, setLoading] = useState(true); const [admin, setAdmin] = useState(false)
+  const refresh = async (currentUser = user) => { if (!currentUser) return; const { data } = await supabase.from('profiles').select('full_name,batch,gender,phone,fast_id_status').eq('id', currentUser.id).maybeSingle(); setProfile(data as Profile | null); setLoading(false) }
+  useEffect(() => { supabase.auth.getUser().then(({ data }) => { if (data.user) { const next = { id: data.user.id, email: data.user.email }; setUser(next); refresh(next) } else setLoading(false) }); const { data } = supabase.auth.onAuthStateChange((_event, session) => { if (session?.user) { const next = { id: session.user.id, email: session.user.email }; setUser(next); refresh(next) } else { setUser(null); setProfile(null) } }); return () => data.subscription.unsubscribe() }, [])
+  const signOut = async () => { await supabase.auth.signOut(); setUser(null); setProfile(null) }
+  const screen = useMemo(() => { if (loading) return <ActivityIndicator size="large" />; if (!user) return <AuthScreen onUser={(next) => { setUser(next); refresh(next) }} />; if (admin) return <AdminScreen onBack={() => setAdmin(false)} />; if (!profile) return <OnboardingScreen user={user} onDone={() => refresh()} />; return <PendingScreen user={user} status={profile.fast_id_status} onRefresh={() => refresh()} onSignOut={signOut} onAdmin={() => setAdmin(true)} /> }, [loading, user, profile, admin])
+  return screen
+}
+
+const styles = StyleSheet.create({ safe: { flex: 1, backgroundColor: '#F8FAFC' }, container: { flexGrow: 1, padding: 24, justifyContent: 'center' }, authCard: { margin: 24, padding: 24, borderRadius: 20, backgroundColor: '#FFF', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 16, elevation: 3 }, brand: { color: '#2563EB', fontSize: 16, fontWeight: '800', letterSpacing: 0.4, marginBottom: 12 }, heading: { fontSize: 28, fontWeight: '800', color: '#0F172A', marginBottom: 10 }, muted: { color: '#64748B', lineHeight: 21 }, input: { backgroundColor: '#FFF', borderColor: '#E2E8F0', borderWidth: 1, borderRadius: 12, padding: 14, marginTop: 12, color: '#0F172A' }, button: { backgroundColor: '#2563EB', borderRadius: 12, padding: 15, alignItems: 'center', marginTop: 14 }, buttonText: { color: '#FFF', fontWeight: '700' }, secondaryButton: { backgroundColor: '#EFF6FF' }, secondaryButtonText: { color: '#2563EB' }, disabled: { opacity: 0.55 }, privacy: { color: '#64748B', fontSize: 12, lineHeight: 18, marginTop: 20 }, notice: { backgroundColor: '#EFF6FF', padding: 16, borderRadius: 14, marginTop: 18 }, noticeTitle: { color: '#1D4ED8', fontWeight: '800', marginBottom: 6 }, preview: { width: '100%', height: 180, borderRadius: 12, marginTop: 14, resizeMode: 'cover' }, reviewCard: { backgroundColor: '#FFF', padding: 16, borderRadius: 16, marginTop: 16 }, cardTitle: { fontSize: 18, fontWeight: '700', color: '#0F172A' }, row: { flexDirection: 'row', gap: 10 } })
