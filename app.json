@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "plugins": [["expo-image-picker", { "photosPermission": "FASTPOOL uses your photos only to submit your FAST ID for one-time verification.", "cameraPermission": "FASTPOOL uses your camera only to submit your FAST ID for one-time verification.", "microphonePermission": false }]],
+    "plugins": [["expo-image-picker", { "photosPermission": "FASTPOOL uses your photos only to submit your FAST ID for one-time verification.", "cameraPermission": "FASTPOOL uses your camera only to submit your FAST ID for one-time verification.", "microphonePermission": false }], ["expo-location", { "locationWhenInUsePermission": "FASTPOOL uses your location to sort nearby rides and share it only during an accepted active ride." }], "expo-notifications"],
     "ios": {
       "supportsTablet": true
     },
