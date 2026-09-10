@@ -37,13 +37,13 @@ create policy "verification_select_own" on public.fast_id_verifications for sele
 drop policy if exists "verification_insert_own" on public.fast_id_verifications;
 create policy "verification_insert_own" on public.fast_id_verifications for insert to authenticated with check ((select auth.uid()) = user_id);
 
--- Temporary admin gate. Replace this UUID with the owner's Supabase auth user ID.
+-- Temporary admin gate. This is the current owner's Supabase auth user ID.
 drop policy if exists "verification_admin_select" on public.fast_id_verifications;
-create policy "verification_admin_select" on public.fast_id_verifications for select to authenticated using ((select auth.uid()) = '00000000-0000-0000-0000-000000000000'::uuid);
+create policy "verification_admin_select" on public.fast_id_verifications for select to authenticated using ((select auth.uid()) = '7e19995c-437e-4f15-9a3f-b50ea1414402'::uuid);
 drop policy if exists "verification_admin_delete" on public.fast_id_verifications;
-create policy "verification_admin_delete" on public.fast_id_verifications for delete to authenticated using ((select auth.uid()) = '00000000-0000-0000-0000-000000000000'::uuid);
+create policy "verification_admin_delete" on public.fast_id_verifications for delete to authenticated using ((select auth.uid()) = '7e19995c-437e-4f15-9a3f-b50ea1414402'::uuid);
 drop policy if exists "profiles_admin_update" on public.profiles;
-create policy "profiles_admin_update" on public.profiles for update to authenticated using ((select auth.uid()) = '00000000-0000-0000-0000-000000000000'::uuid) with check (fast_id_status in ('pending', 'verified', 'rejected'));
+create policy "profiles_admin_update" on public.profiles for update to authenticated using ((select auth.uid()) = '7e19995c-437e-4f15-9a3f-b50ea1414402'::uuid) with check (fast_id_status in ('pending', 'verified', 'rejected'));
 
 insert into storage.buckets (id, name, public) values ('fast-id-cards', 'fast-id-cards', false) on conflict (id) do update set public = false;
 
@@ -51,5 +51,7 @@ drop policy if exists "id_cards_insert_own_folder" on storage.objects;
 create policy "id_cards_insert_own_folder" on storage.objects for insert to authenticated with check (bucket_id = 'fast-id-cards' and (storage.foldername(name))[1] = (select auth.uid())::text);
 drop policy if exists "id_cards_select_own_folder" on storage.objects;
 create policy "id_cards_select_own_folder" on storage.objects for select to authenticated using (bucket_id = 'fast-id-cards' and (storage.foldername(name))[1] = (select auth.uid())::text);
+drop policy if exists "id_cards_select_admin" on storage.objects;
+create policy "id_cards_select_admin" on storage.objects for select to authenticated using (bucket_id = 'fast-id-cards' and (select auth.uid()) = '7e19995c-437e-4f15-9a3f-b50ea1414402'::uuid);
 drop policy if exists "id_cards_delete_admin" on storage.objects;
-create policy "id_cards_delete_admin" on storage.objects for delete to authenticated using (bucket_id = 'fast-id-cards' and (select auth.uid()) = '00000000-0000-0000-0000-000000000000'::uuid);
+create policy "id_cards_delete_admin" on storage.objects for delete to authenticated using (bucket_id = 'fast-id-cards' and (select auth.uid()) = '7e19995c-437e-4f15-9a3f-b50ea1414402'::uuid);

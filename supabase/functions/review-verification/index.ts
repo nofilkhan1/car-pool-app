@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.0'
 
-const ADMIN_USER_ID = Deno.env.get('FAST_CARPOOL_ADMIN_USER_ID') ?? 'REPLACE_WITH_ADMIN_USER_ID'
+const ADMIN_USER_ID = Deno.env.get('FAST_CARPOOL_ADMIN_USER_ID') ?? '7e19995c-437e-4f15-9a3f-b50ea1414402'
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' }
 
 Deno.serve(async (request) => {
