@@ -16,4 +16,4 @@ FAST Carpool is an Expo SDK 57 app for verified FAST students to coordinate ride
 - Build the Play Store artifact with `eas build --platform android --profile production` (AAB is the recommended Play format).
 - Submit after reviewing the generated privacy/data-safety declarations: `eas submit --platform android --profile production`.
 
-The app requests location, camera/photo access, notifications, and stores a private phone number. ID-card images are deleted after review; only the verification result remains.
+The app requests location, camera/photo access, notifications, and stores a private phone number. FAST student card images (name, roll number/batch, and photo) are deleted after review; no government ID is collected and only the verification result remains.
