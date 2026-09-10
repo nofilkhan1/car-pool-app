@@ -1,8 +1,9 @@
 {
   "expo": {
-    "name": "fast-carpool-scaffold",
-    "slug": "fast-carpool-scaffold",
+    "name": "FAST Carpool",
+    "slug": "fast-carpool",
     "version": "1.0.0",
+    "scheme": "fastcarpool",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
